@@ -78,14 +78,20 @@ function normaliseStatus(raw) {
   return 'unknown';
 }
 
-async function coolifyGet(endpoint) {
+async function coolifyGetRaw(endpoint) {
   const res = await fetch(`${CONFIG.coolifyUrl}/api/v1/${endpoint}`, {
     headers: { Authorization: `Bearer ${CONFIG.token}`, Accept: 'application/json' },
     signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) throw new Error(`GET ${endpoint} -> HTTP ${res.status}`);
-  const body = await res.json();
-  // Some endpoints return a bare array, others wrap it in { data: [...] }.
+  return res.json();
+}
+
+// List endpoints return a bare array, or wrap it in { data: [...] }. Single
+// resources return the object itself — which must not be flattened to [],
+// since that is where a project's environments live.
+async function coolifyGet(endpoint) {
+  const body = await coolifyGetRaw(endpoint);
   return Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
 }
 
@@ -95,7 +101,13 @@ async function buildProjectIndex() {
   const index = new Map();
   try {
     const projects = await coolifyGet('projects');
-    for (const project of projects) {
+    // The list endpoint omits `environments`; only the per-project endpoint
+    // returns them, and environment_id is the sole link back from an app.
+    const detailed = await Promise.all(
+      projects.map((p) => (p.uuid ? coolifyGetRaw(`projects/${p.uuid}`).catch(() => null) : null))
+    );
+    for (const project of detailed) {
+      if (!project) continue;
       for (const env of project.environments || []) {
         if (env?.id != null) index.set(String(env.id), project.name);
       }
@@ -104,6 +116,12 @@ async function buildProjectIndex() {
     // Non-fatal — grouping falls back to "Apps".
   }
   return index;
+}
+
+// Coolify names git-deployed apps "<repo>:<branch>-<generated id>". The tail
+// is noise on a launcher tile, so show the part a human chose.
+function tidyName(raw) {
+  return String(raw).split(':')[0].replace(/-[a-z0-9]{20,}$/i, '');
 }
 
 function toEntries(resources, kind, projectIndex) {
@@ -121,7 +139,7 @@ function toEntries(resources, kind, projectIndex) {
 
     entries.push({
       id: resource.uuid || `${kind}-${name}`,
-      name,
+      name: tidyName(name),
       kind,
       description: resource.description || '',
       status: normaliseStatus(resource.status),
