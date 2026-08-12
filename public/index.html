@@ -35,7 +35,8 @@ h1{font-size:20px;font-weight:650;margin:0;letter-spacing:-.01em;white-space:now
 .search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.45;pointer-events:none}
 .meta{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);white-space:nowrap}
 .btn{border:1px solid var(--border);background:var(--panel);color:var(--muted);
-  border-radius:9px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+  border-radius:9px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit;
+  text-decoration:none;display:inline-block;line-height:1.3}
 .btn:hover{background:var(--panel-hover);color:var(--text)}
 .badge{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;
   background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
@@ -80,6 +81,7 @@ kbd{background:var(--panel);border:1px solid var(--border);border-bottom-width:2
     <div class="meta">
       <span id="stamp">loading…</span>
       <button class="btn" id="refresh">Refresh</button>
+      <a class="btn" id="signout" href="/auth/logout" hidden>Sign out</a>
     </div>
   </header>
   <div id="banner"></div>
@@ -151,6 +153,9 @@ async function load(force) {
       ? new Date(data.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
         (data.stale ? ' <span class="badge">stale</span>' : '')
       : '—';
+    const signout = document.getElementById('signout');
+    signout.hidden = data.authMode !== 'oidc';
+    if (data.user) signout.title = `Signed in as ${data.user}`;
     banner.innerHTML = data.error ? `<div class="err">Coolify: ${esc(data.error)}</div>` : '';
     render();
   } catch (err) {

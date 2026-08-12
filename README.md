@@ -27,12 +27,29 @@ amber degraded, red stopped) and the app's own favicon. Type to filter;
 
 Copy `.env.example`. The only required value is `COOLIFY_TOKEN` — mint it in
 the Coolify UI under **Profile → API Tokens**; a read-only token is enough.
+The token is used server-side only and is never sent to the browser.
 
-`PASSCODE` is optional but recommended. This page is an index of every internal
-service, and the `*.edgestudios.co.za` wildcard means any hostname resolves
-publicly — so without a passcode the list is readable by anyone who finds the
-URL. The Coolify token itself is only ever used server-side and is never sent
-to the browser.
+## Access control — Pocket-ID SSO
+
+This page is an index of every internal service, and the `*.edgestudios.co.za`
+wildcard means any hostname resolves publicly, so it should not be left open.
+
+Create an OIDC client in Pocket-ID with callback URL
+`https://launch.edgestudios.co.za/auth/callback`, then set `OIDC_CLIENT_ID`,
+`OIDC_CLIENT_SECRET` and `BASE_URL`. The launcher then requires a Pocket-ID
+login for every page and API call; `OIDC_ALLOWED_GROUPS` narrows it further to
+named groups.
+
+Authorization-code flow with PKCE (S256), implemented against Pocket-ID's own
+discovery document. Sessions are stateless signed cookies (HttpOnly, SameSite
+Lax, `Secure` behind the proxy), keyed off the client secret so they survive a
+restart. The ID token is checked for issuer, audience and expiry; its
+signature is not re-verified because it arrives over TLS directly from the
+token endpoint in response to the server's own request (OIDC Core 3.1.3.7).
+
+`PASSCODE` remains as a fallback for when the OIDC values are unset. With
+neither configured the page is open to anyone who can reach it, and the server
+says so loudly at startup.
 
 ## Deploying on Coolify
 
@@ -56,9 +73,11 @@ COOLIFY_TOKEN=... node server.js
 Node 20+. No dependencies — the server uses only built-ins, so there is no
 `npm install` step and nothing in the image but the runtime and two files.
 
-## Upgrade path
+## Endpoints
 
-The platform's stated principle is SSO through Pocket-ID. The passcode gate is
-deliberately the smaller, self-contained option; swapping it for a Pocket-ID
-OIDC client is the natural next step if this page becomes something more than
-a personal bookmark.
+| Path | Purpose |
+|---|---|
+| `/` | The launcher page |
+| `/api/apps` | JSON the page polls; `?refresh=1` forces a Coolify re-poll |
+| `/healthz` | App count and staleness, unauthenticated, for Coolify's health check |
+| `/auth/login`, `/auth/callback`, `/auth/logout` | Pocket-ID flow (OIDC mode only) |

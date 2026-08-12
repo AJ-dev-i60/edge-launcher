@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { OidcAuth } = require('./auth');
 
 const CONFIG = {
   coolifyUrl: (process.env.COOLIFY_URL || 'https://coolify.edgestudios.co.za').replace(/\/+$/, ''),
@@ -14,7 +15,23 @@ const CONFIG = {
   title: process.env.TITLE || 'EdgeStudios',
   // Comma-separated resource names to leave off the page.
   hidden: (process.env.HIDE || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  oidc: {
+    issuer: process.env.OIDC_ISSUER || 'https://id.edgestudios.co.za',
+    clientId: process.env.OIDC_CLIENT_ID || '',
+    clientSecret: process.env.OIDC_CLIENT_SECRET || '',
+    baseUrl: process.env.BASE_URL || '',
+    allowedGroups: (process.env.OIDC_ALLOWED_GROUPS || '')
+      .split(',').map((s) => s.trim()).filter(Boolean),
+  },
 };
+
+// Pocket-ID if it is configured, else the passcode, else open. Declaring the
+// mode once here keeps every later decision a single comparison.
+const oidc =
+  CONFIG.oidc.clientId && CONFIG.oidc.clientSecret && CONFIG.oidc.baseUrl
+    ? new OidcAuth(CONFIG.oidc)
+    : null;
+const AUTH_MODE = oidc ? 'oidc' : process.env.PASSCODE ? 'passcode' : 'open';
 
 // ---------------------------------------------------------------------------
 // Coolify polling
@@ -161,6 +178,7 @@ const passHash = CONFIG.passcode
   : null;
 
 function isAuthed(req) {
+  if (AUTH_MODE === 'oidc') return Boolean(oidc.sessionFrom(req));
   if (!passHash) return true;
   const cookie = req.headers.cookie || '';
   const match = /(?:^|;\s*)el_auth=([a-f0-9]{64})/.exec(cookie);
@@ -184,6 +202,15 @@ p{margin:0;color:#f87171;font-size:14px;min-height:20px}
 </style></head><body><form method="POST" action="/login">
 <h1>Launcher</h1><input type="password" name="passcode" placeholder="Passcode" autofocus autocomplete="current-password">
 <button type="submit">Enter</button><p>__ERROR__</p></form></body></html>`;
+
+function authError(message) {
+  const safe = String(message).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<!doctype html><meta charset="utf-8"><title>Sign-in failed</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#e7e9ee;
+font:15px/1.6 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center;padding:20px}
+a{color:#7aa5f7}p{color:#f87171;max-width:46ch}</style>
+<div><h1 style="font-size:18px">Sign-in failed</h1><p>${safe}</p><a href="/auth/login">Try again</a></div>`;
+}
 
 // ---------------------------------------------------------------------------
 // HTTP
@@ -229,13 +256,58 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (!isAuthed(req)) {
+  if (AUTH_MODE === 'oidc') {
+    const secure = (req.headers['x-forwarded-proto'] || '').includes('https');
+
+    if (url.pathname === '/auth/login') {
+      try {
+        const target = await oidc.authorizeUrl(url.searchParams.get('return') || '/');
+        return send(res, 302, 'text/plain', 'redirecting', { Location: target });
+      } catch (err) {
+        return send(res, 502, 'text/html; charset=utf-8', authError(`Cannot reach Pocket-ID: ${err.message}`));
+      }
+    }
+
+    if (url.pathname === '/auth/callback') {
+      try {
+        const { cookie, returnTo } = await oidc.callback(url);
+        return send(res, 302, 'text/plain', 'ok', {
+          'Set-Cookie': oidc.cookieHeader(cookie, secure),
+          Location: returnTo,
+        });
+      } catch (err) {
+        return send(res, 401, 'text/html; charset=utf-8', authError(err.message));
+      }
+    }
+
+    if (url.pathname === '/auth/logout') {
+      return send(res, 302, 'text/plain', 'bye', {
+        'Set-Cookie': oidc.clearCookieHeader(secure),
+        Location: '/',
+      });
+    }
+
+    // Anything else, unauthenticated: bounce straight into Pocket-ID rather
+    // than showing an interstitial nobody would read.
+    if (!isAuthed(req)) {
+      if (url.pathname.startsWith('/api/')) return send(res, 401, 'application/json', '{"error":"unauthenticated"}');
+      return send(res, 302, 'text/plain', 'login', {
+        Location: `/auth/login?return=${encodeURIComponent(url.pathname)}`,
+      });
+    }
+  } else if (!isAuthed(req)) {
     return send(res, 401, 'text/html; charset=utf-8', LOGIN_PAGE.replace('__ERROR__', ''));
   }
 
   if (url.pathname === '/api/apps') {
     if (url.searchParams.get('refresh') === '1') await refresh();
-    return send(res, 200, 'application/json', JSON.stringify({ ...cache, title: CONFIG.title }));
+    const session = AUTH_MODE === 'oidc' ? oidc.sessionFrom(req) : null;
+    return send(
+      res,
+      200,
+      'application/json',
+      JSON.stringify({ ...cache, title: CONFIG.title, authMode: AUTH_MODE, user: session?.name || null })
+    );
   }
 
   if (url.pathname === '/') {
@@ -248,7 +320,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(CONFIG.port, () => {
   console.log(`[launcher] listening on :${CONFIG.port} -> ${CONFIG.coolifyUrl}`);
   if (!CONFIG.token) console.warn('[launcher] WARNING: COOLIFY_TOKEN is not set; the page will be empty');
-  if (!passHash) console.warn('[launcher] WARNING: PASSCODE is not set; the page is open to anyone who can reach it');
+  console.log(`[launcher] auth mode: ${AUTH_MODE}${AUTH_MODE === 'oidc' ? ` (${CONFIG.oidc.issuer})` : ''}`);
+  if (AUTH_MODE === 'open') {
+    console.warn('[launcher] WARNING: no auth configured; anyone who can reach this host sees every app');
+  }
   refresh();
   setInterval(refresh, CONFIG.refreshMs).unref();
 });
