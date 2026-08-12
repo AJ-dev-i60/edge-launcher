@@ -4,172 +4,315 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Launcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+/* Industry design system supplies only the font pair and the reset; the
+   Launchpad design carries its own dark palette, inlined here as tokens. */
 :root{
-  color-scheme:light dark;
-  --bg:#f6f7f9; --panel:#ffffff; --panel-hover:#f0f2f6;
-  --text:#12151c; --muted:#5b6472; --border:#e2e6ec;
-  --accent:#2f6fed; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --idle:#98a2b3;
-  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+  --font-heading:"Barlow Condensed",system-ui,sans-serif;
+  --font-body:"Barlow",system-ui,sans-serif;
+  --bg:#17181a;
+  --ink:#f4f1ea;
+  --accent:#d8a24a;
+  --accent-hi:#e8b968;
+  --bad:#c9705a;
+  --line:rgba(244,241,234,.26);
+  --line-soft:rgba(244,241,234,.14);
+  --dot-up:#d8a24a;
+  --dot-degraded:#8d7a5c;
+  --dot-down:#4a4a4c;
 }
-@media (prefers-color-scheme:dark){
-  :root{
-    --bg:#0f1115; --panel:#171a21; --panel-hover:#1e222b;
-    --text:#e7e9ee; --muted:#98a2b3; --border:#272c36;
-    --shadow:0 1px 2px rgba(0,0,0,.4);
-  }
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hi)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.shell{min-height:100vh;padding:48px 56px 72px;display:flex;flex-direction:column;gap:40px}
+
+header{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:5px;margin-right:auto}
+.eyebrow{font-family:var(--font-heading);font-size:11px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--accent)}
+.wordmark{font-family:var(--font-heading);font-size:44px;line-height:1}
+.wordmark .tail{opacity:.5}
+.readout{display:flex;align-items:center;gap:26px}
+.clock{display:flex;flex-direction:column;align-items:flex-end}
+.clock .time{font-family:var(--font-heading);font-size:26px;line-height:1}
+.clock .tz{font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:.5}
+.sep{width:1px;height:34px;background:rgba(244,241,234,.2)}
+.health{display:flex;align-items:center;gap:9px}
+.health .beat{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2.4s infinite}
+.health .label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.65}
+.health.is-stale .beat{background:var(--dot-degraded)}
+.health.is-stale .label{opacity:.9;color:var(--dot-degraded)}
+
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pill{font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  padding:8px 16px;border-radius:999px;cursor:pointer;border:1px solid rgba(244,241,234,.24);
+  background:transparent;color:var(--ink);line-height:1.2}
+.pill .n{opacity:.5}
+.pill[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.search{margin-left:auto;position:relative}
+.search input{font-family:var(--font-body);font-size:12px;letter-spacing:.1em;
+  padding:8px 16px 8px 34px;border-radius:999px;border:1px solid rgba(244,241,234,.24);
+  background:transparent;color:var(--ink);min-width:190px;outline:none}
+.search input::placeholder{color:var(--ink);opacity:.4;text-transform:uppercase;letter-spacing:.14em}
+.search input:focus{border-color:var(--accent)}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.4;pointer-events:none}
+
+.err{border:1px solid var(--bad);color:var(--bad);padding:12px 16px;border-radius:12px;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+  grid-auto-rows:210px;gap:24px}
+.tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:20px;border-radius:18px;border:2px solid var(--line);color:var(--ink);
+  transition:border-color .16s,background .16s,transform .16s}
+.tile:hover{border-color:var(--accent);background:rgba(216,162,74,.1);transform:translateY(-3px);color:var(--ink)}
+.tile.is-down{opacity:.5}
+.tile .dot{position:absolute;top:16px;right:16px;width:8px;height:8px;border-radius:50%}
+.tile .state{position:absolute;top:15px;left:18px;font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;opacity:.45}
+.tile .name{font-family:var(--font-heading);font-size:26px;line-height:1}
+.tile .meta{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
+.tile .host{font-size:11px;letter-spacing:.06em;opacity:.55}
+
+.empty{grid-column:1/-1;display:grid;place-items:center;text-align:center;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.45;padding:40px}
+
+footer{margin-top:auto;padding-top:28px;border-top:1px solid var(--line-soft);
+  display:flex;gap:18px;align-items:center;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;opacity:.45}
+footer .right{margin-left:auto}
+footer a{color:inherit}
+footer a:hover{color:var(--accent)}
+
+@media (max-width:640px){
+  .shell{padding:28px 20px 48px;gap:28px}
+  .wordmark{font-size:34px}
+  .search{margin-left:0;width:100%}
+  .search input{width:100%}
 }
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);
-  font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  -webkit-font-smoothing:antialiased}
-.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 64px}
-
-header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:22px}
-h1{font-size:20px;font-weight:650;margin:0;letter-spacing:-.01em;white-space:nowrap}
-.search{flex:1;min-width:220px;position:relative}
-.search input{width:100%;padding:11px 14px 11px 38px;border-radius:11px;
-  border:1px solid var(--border);background:var(--panel);color:inherit;font-size:15px;
-  box-shadow:var(--shadow);outline:none}
-.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
-.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.45;pointer-events:none}
-.meta{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);white-space:nowrap}
-.btn{border:1px solid var(--border);background:var(--panel);color:var(--muted);
-  border-radius:9px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit;
-  text-decoration:none;display:inline-block;line-height:1.3}
-.btn:hover{background:var(--panel-hover);color:var(--text)}
-.badge{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;
-  background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
-
-.group{margin:26px 0 0}
-.group h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
-  color:var(--muted);margin:0 0 11px;padding-left:2px}
-.grid{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
-
-a.tile{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;
-  background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);
-  text-decoration:none;color:inherit;transition:transform .08s ease,background .12s ease;outline:none}
-a.tile:hover{background:var(--panel-hover);transform:translateY(-1px)}
-a.tile:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 26%,transparent)}
-.icon{width:34px;height:34px;border-radius:9px;flex:0 0 34px;display:grid;place-items:center;
-  background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--accent);
-  font-weight:700;font-size:15px;overflow:hidden}
-.icon img{width:100%;height:100%;object-fit:contain}
-.info{min-width:0;flex:1}
-.name{font-weight:580;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.host{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px;background:var(--idle)}
-.dot.running{background:var(--ok)} .dot.degraded{background:var(--warn)} .dot.stopped{background:var(--bad)}
-
-.empty{text-align:center;color:var(--muted);padding:56px 20px}
-.empty code{background:var(--panel);padding:2px 7px;border-radius:6px;border:1px solid var(--border);font-size:13px}
-.err{background:color-mix(in srgb,var(--bad) 11%,transparent);border:1px solid color-mix(in srgb,var(--bad) 32%,transparent);
-  color:var(--bad);padding:11px 14px;border-radius:10px;margin-bottom:18px;font-size:13.5px}
-kbd{background:var(--panel);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;
-  padding:1px 6px;font:600 11.5px ui-monospace,monospace;color:var(--muted)}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="shell">
   <header>
-    <h1 id="title">Launcher</h1>
-    <div class="search">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-           stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Search apps…   /" autocomplete="off" spellcheck="false">
+    <div class="brand">
+      <span class="eyebrow" id="eyebrow">&nbsp;</span>
+      <span class="wordmark" id="wordmark">&nbsp;</span>
     </div>
-    <div class="meta">
-      <span id="stamp">loading…</span>
-      <button class="btn" id="refresh">Refresh</button>
-      <a class="btn" id="signout" href="/auth/logout" hidden>Sign out</a>
+    <div class="readout">
+      <div class="clock">
+        <span class="time" id="clock">--:--</span>
+        <span class="tz" id="tz"></span>
+      </div>
+      <span class="sep"></span>
+      <div class="health" id="health">
+        <span class="beat"></span>
+        <span class="label" id="healthLabel">connecting</span>
+      </div>
     </div>
   </header>
+
+  <div class="controls" id="controls">
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search  /" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+
   <div id="banner"></div>
-  <main id="out"></main>
+  <main class="grid" id="out"></main>
+
+  <footer>
+    <span id="pollNote"></span>
+    <span class="right" id="session"></span>
+  </footer>
 </div>
 
 <script>
-const out = document.getElementById('out');
-const banner = document.getElementById('banner');
-const stamp = document.getElementById('stamp');
-const q = document.getElementById('q');
-let apps = [];
+// ---------------------------------------------------------------------------
+// Line-icon set, carried over from the design. Coolify has no icon field, so
+// the glyph is chosen from the resource name; anything unmatched gets `server`
+// rather than a broken or invented image.
+// ---------------------------------------------------------------------------
+const ICONS = {
+  chart:    [['path','M3 3v18h18'],['path','M18 17V9'],['path','M13 17V5'],['path','M8 17v-3']],
+  flow:     [['path','M6 3v9'],['circle',18,6,3],['circle',6,18,3],['path','M18 9a9 9 0 0 1-9 9']],
+  git:      [['circle',18,18,3],['circle',6,6,3],['path','M13 6h3a2 2 0 0 1 2 2v7'],['path','M6 9v12']],
+  shield:   [['path','M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],['path','M9 12l2 2 4-4']],
+  pulse:    [['path','M22 12h-4l-3 9L9 3l-3 9H2']],
+  book:     [['path','M12 7v14'],['path','M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z']],
+  database: [['ellipse',12,5,9,3],['path','M3 5v14a9 3 0 0 0 18 0V5'],['path','M3 12a9 3 0 0 0 18 0']],
+  pie:      [['path','M21.21 15.89A10 10 0 1 1 8 2.83'],['path','M22 12A10 10 0 0 0 12 2v10z']],
+  server:   [['rect',2,2,20,8],['rect',2,14,20,8],['path','M6 6h.01'],['path','M6 18h.01']],
+};
 
-const hostOf = (u) => { try { return new URL(u).host; } catch { return u; } };
+// First match wins, so the more specific patterns come first.
+const ICON_RULES = [
+  [/wiki|outline|doc|book|blog|note|knowledge|cafe|menu|game/, 'book'],
+  [/\bid\b|auth|vault|pass|secret|shield|secure|pocket/, 'shield'],
+  [/git|repo|forge|code/, 'git'],
+  [/status|uptime|monitor|health|pulse|scribe|voice|audio|transcri/, 'pulse'],
+  [/data|postgres|sql|store|case|inventory|asset|catalog/, 'database'],
+  [/analytic|metric|finance|haven|chart|budget|money/, 'chart'],
+  [/report|insight|mentory|bi\b|dash/, 'pie'],
+  [/flow|automat|n8n|launch|pipeline|deploy/, 'flow'],
+];
 
-function render() {
-  const term = q.value.trim().toLowerCase();
-  const shown = apps.filter(a =>
-    !term || a.name.toLowerCase().includes(term) ||
-    a.url.toLowerCase().includes(term) ||
-    (a.description || '').toLowerCase().includes(term) ||
-    a.project.toLowerCase().includes(term));
-
-  if (!shown.length) {
-    out.innerHTML = apps.length
-      ? '<div class="empty">Nothing matches that.</div>'
-      : '<div class="empty">No apps with a domain yet.<br><br>Give a resource an FQDN in Coolify and it appears here automatically.</div>';
-    return;
-  }
-
-  const groups = {};
-  for (const a of shown) (groups[a.project] ||= []).push(a);
-
-  out.innerHTML = Object.entries(groups).map(([project, list]) => `
-    <section class="group">
-      <h2>${esc(project)} · ${list.length}</h2>
-      <div class="grid">
-        ${list.map(a => `
-          <a class="tile" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer"
-             title="${esc(a.description || a.url)}">
-            <span class="icon" data-letter="${esc(a.name[0].toUpperCase())}">
-              <img src="${esc(new URL('/favicon.ico', a.url).href)}" alt="" loading="lazy"
-                   onerror="this.replaceWith(document.createTextNode(this.parentNode.dataset.letter))">
-            </span>
-            <span class="info">
-              <div class="name">${esc(a.name)}</div>
-              <div class="host">${esc(hostOf(a.url))}</div>
-            </span>
-            <span class="dot ${esc(a.status)}" title="${esc(a.status)}"></span>
-          </a>`).join('')}
-      </div>
-    </section>`).join('');
+function iconFor(name) {
+  const key = String(name).toLowerCase();
+  for (const [re, glyph] of ICON_RULES) if (re.test(key)) return glyph;
+  return 'server';
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function iconSvg(glyph, size) {
+  const parts = (ICONS[glyph] || ICONS.server).map((d) => {
+    if (d[0] === 'circle') return `<circle cx="${d[1]}" cy="${d[2]}" r="${d[3]}"/>`;
+    if (d[0] === 'ellipse') return `<ellipse cx="${d[1]}" cy="${d[2]}" rx="${d[3]}" ry="${d[4]}"/>`;
+    if (d[0] === 'rect') return `<rect x="${d[1]}" y="${d[2]}" width="${d[3]}" height="${d[4]}" rx="2"/>`;
+    return `<path d="${d[1]}"/>`;
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${parts}</svg>`;
+}
+
+const DOT = { running: 'var(--dot-up)', degraded: 'var(--dot-degraded)',
+              stopped: 'var(--dot-down)', unknown: 'var(--dot-down)' };
+
+// ---------------------------------------------------------------------------
+
+const out = document.getElementById('out');
+const banner = document.getElementById('banner');
+const controls = document.getElementById('controls');
+const searchWrap = document.querySelector('.search');
+const q = document.getElementById('q');
+const health = document.getElementById('health');
+const healthLabel = document.getElementById('healthLabel');
+
+let data = { apps: [], stale: true, error: null, fetchedAt: null };
+let filter = 'All';
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hostOf = (u) => { try { return new URL(u).host; } catch { return u; } };
+
+// "EdgeStudios" -> EDGE + dimmed STUDIOS. Falls back to splitting in half so
+// a single lowercase word still gets the two-tone treatment.
+function wordmark(title) {
+  const t = String(title || 'Launcher');
+  const camel = /^([A-Za-z][a-z0-9]*)([A-Z].*)$/.exec(t);
+  const [head, tail] = camel ? [camel[1], camel[2]] : [t.slice(0, Math.ceil(t.length / 2)), t.slice(Math.ceil(t.length / 2))];
+  return `${esc(head.toUpperCase())}<span class="tail">${esc(tail.toUpperCase())}</span>`;
+}
+
+function ago(iso) {
+  if (!iso) return 'never';
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  return Math.round(s / 3600) + 'h ago';
+}
+
+function renderControls() {
+  const projects = [...new Set(data.apps.map((a) => a.project))].sort();
+  const names = ['All', ...projects];
+  if (!names.includes(filter)) filter = 'All';
+
+  for (const el of [...controls.querySelectorAll('.pill')]) el.remove();
+  for (const name of names) {
+    const count = name === 'All' ? data.apps.length : data.apps.filter((a) => a.project === name).length;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pill';
+    b.setAttribute('aria-pressed', String(name === filter));
+    b.innerHTML = `${esc(name)} <span class="n">${count}</span>`;
+    b.addEventListener('click', () => { filter = name; renderControls(); renderGrid(); });
+    controls.insertBefore(b, searchWrap);
+  }
+}
+
+function visible() {
+  const term = q.value.trim().toLowerCase();
+  return data.apps.filter((a) =>
+    (filter === 'All' || a.project === filter) &&
+    (!term || a.name.toLowerCase().includes(term) || a.url.toLowerCase().includes(term) ||
+      (a.description || '').toLowerCase().includes(term) || a.project.toLowerCase().includes(term)));
+}
+
+function renderGrid() {
+  const list = visible();
+  if (!list.length) {
+    out.innerHTML = `<div class="empty">${data.apps.length ? 'No match' : 'No apps with a domain yet'}</div>`;
+    return;
+  }
+  out.innerHTML = list.map((a) => `
+    <a class="tile${a.status === 'stopped' ? ' is-down' : ''}" href="${esc(a.url)}"
+       target="_blank" rel="noopener noreferrer" title="${esc(a.description || a.url)}">
+      <span class="dot" style="background:${DOT[a.status] || DOT.unknown}"></span>
+      <span class="state">${esc(a.status)}</span>
+      ${iconSvg(iconFor(a.name), 52)}
+      <span class="meta">
+        <span class="name">${esc(a.name)}</span>
+        <span class="host">${esc(hostOf(a.url))}</span>
+      </span>
+    </a>`).join('');
+}
+
+// The clock and the "synced" label tick every second. They are updated in
+// place rather than through renderGrid(), so a tick never steals focus from
+// the search box or drops a hover mid-pointer.
+function tick() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+  const up = data.apps.filter((a) => a.status === 'running').length;
+  healthLabel.textContent = data.stale
+    ? `stale · last synced ${ago(data.fetchedAt)}`
+    : `${up}/${data.apps.length} healthy · synced ${ago(data.fetchedAt)}`;
+  health.classList.toggle('is-stale', Boolean(data.stale));
 }
 
 async function load(force) {
   try {
     const res = await fetch('/api/apps' + (force ? '?refresh=1' : ''), { cache: 'no-store' });
     if (res.status === 401) return location.reload();
-    const data = await res.json();
-    apps = data.apps || [];
-    document.getElementById('title').textContent = data.title || 'Launcher';
+    data = await res.json();
+
+    document.getElementById('wordmark').innerHTML = wordmark(data.title);
+    document.getElementById('eyebrow').textContent = data.subtitle || '';
     document.title = (data.title || 'Launcher') + ' · Launcher';
-    stamp.innerHTML = data.fetchedAt
-      ? new Date(data.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-        (data.stale ? ' <span class="badge">stale</span>' : '')
-      : '—';
-    const signout = document.getElementById('signout');
-    signout.hidden = data.authMode !== 'oidc';
-    if (data.user) signout.title = `Signed in as ${data.user}`;
-    banner.innerHTML = data.error ? `<div class="err">Coolify: ${esc(data.error)}</div>` : '';
-    render();
+    document.getElementById('tz').textContent =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    document.getElementById('pollNote').textContent =
+      `Polling the Coolify API every ${Math.round((data.refreshMs || 60000) / 1000)}s`;
+
+    const session = document.getElementById('session');
+    session.innerHTML = data.authMode === 'oidc'
+      ? `<a href="/auth/logout">Sign out${data.user ? ' · ' + esc(data.user) : ''}</a>`
+      : '';
+
+    banner.innerHTML = data.error ? `<div class="err">Coolify — ${esc(data.error)}</div>` : '';
+    renderControls();
+    renderGrid();
+    tick();
   } catch (err) {
-    banner.innerHTML = `<div class="err">Cannot reach the launcher API: ${esc(err.message)}</div>`;
+    banner.innerHTML = `<div class="err">Launcher API unreachable — ${esc(err.message)}</div>`;
   }
 }
 
-q.addEventListener('input', render);
-document.getElementById('refresh').addEventListener('click', () => load(true));
-
-// `/` jumps to search; Enter opens the first result; Esc clears.
+q.addEventListener('input', renderGrid);
 document.addEventListener('keydown', (e) => {
   if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); q.select(); }
-  else if (e.key === 'Escape') { q.value = ''; render(); q.blur(); }
+  else if (e.key === 'Escape') { q.value = ''; renderGrid(); q.blur(); }
   else if (e.key === 'Enter' && document.activeElement === q) {
     const first = out.querySelector('a.tile');
     if (first) window.open(first.href, '_blank', 'noopener');
@@ -177,8 +320,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 load();
+setInterval(tick, 1000);
 setInterval(load, 30000);
-// A tab left open overnight should be current the moment it is focused again.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 </script>
 </body>

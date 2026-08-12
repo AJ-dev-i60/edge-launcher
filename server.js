@@ -13,6 +13,8 @@ const CONFIG = {
   refreshMs: Number(process.env.REFRESH_MS || 60000),
   passcode: process.env.PASSCODE || '',
   title: process.env.TITLE || 'EdgeStudios',
+  // Shown as the eyebrow above the wordmark — which box this is.
+  subtitle: process.env.SUBTITLE || 'vps01 · coolify',
   // Comma-separated resource names to leave off the page.
   hidden: (process.env.HIDE || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   oidc: {
@@ -224,10 +226,15 @@ p{margin:0;color:#f87171;font-size:14px;min-height:20px}
 function authError(message) {
   const safe = String(message).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   return `<!doctype html><meta charset="utf-8"><title>Sign-in failed</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#e7e9ee;
-font:15px/1.6 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center;padding:20px}
-a{color:#7aa5f7}p{color:#f87171;max-width:46ch}</style>
-<div><h1 style="font-size:18px">Sign-in failed</h1><p>${safe}</p><a href="/auth/login">Try again</a></div>`;
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#17181a;color:#f4f1ea;
+font:15px/1.6 "Barlow",system-ui,sans-serif;text-align:center;padding:24px}
+h1{font-family:"Barlow Condensed",system-ui,sans-serif;font-size:30px;letter-spacing:.02em;margin:0 0 10px}
+p{color:#c9705a;max-width:52ch;margin:0 0 22px}
+a{color:#d8a24a;text-decoration:none;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+border:1px solid #d8a24a;border-radius:999px;padding:8px 18px}
+a:hover{background:rgba(216,162,74,.12)}</style>
+<div><h1>SIGN-IN FAILED</h1><p>${safe}</p><a href="/auth/login">Try again</a></div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +331,14 @@ const server = http.createServer(async (req, res) => {
       res,
       200,
       'application/json',
-      JSON.stringify({ ...cache, title: CONFIG.title, authMode: AUTH_MODE, user: session?.name || null })
+      JSON.stringify({
+        ...cache,
+        title: CONFIG.title,
+        subtitle: CONFIG.subtitle,
+        refreshMs: CONFIG.refreshMs,
+        authMode: AUTH_MODE,
+        user: session?.name || null,
+      })
     );
   }
 
