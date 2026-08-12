@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Launcher</title>
+<style>
+:root{
+  color-scheme:light dark;
+  --bg:#f6f7f9; --panel:#ffffff; --panel-hover:#f0f2f6;
+  --text:#12151c; --muted:#5b6472; --border:#e2e6ec;
+  --accent:#2f6fed; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --idle:#98a2b3;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-hover:#1e222b;
+    --text:#e7e9ee; --muted:#98a2b3; --border:#272c36;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 64px}
+
+header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:22px}
+h1{font-size:20px;font-weight:650;margin:0;letter-spacing:-.01em;white-space:nowrap}
+.search{flex:1;min-width:220px;position:relative}
+.search input{width:100%;padding:11px 14px 11px 38px;border-radius:11px;
+  border:1px solid var(--border);background:var(--panel);color:inherit;font-size:15px;
+  box-shadow:var(--shadow);outline:none}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.45;pointer-events:none}
+.meta{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);white-space:nowrap}
+.btn{border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:9px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:hover{background:var(--panel-hover);color:var(--text)}
+.badge{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+
+.group{margin:26px 0 0}
+.group h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--muted);margin:0 0 11px;padding-left:2px}
+.grid{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+
+a.tile{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;
+  background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);
+  text-decoration:none;color:inherit;transition:transform .08s ease,background .12s ease;outline:none}
+a.tile:hover{background:var(--panel-hover);transform:translateY(-1px)}
+a.tile:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 26%,transparent)}
+.icon{width:34px;height:34px;border-radius:9px;flex:0 0 34px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--accent);
+  font-weight:700;font-size:15px;overflow:hidden}
+.icon img{width:100%;height:100%;object-fit:contain}
+.info{min-width:0;flex:1}
+.name{font-weight:580;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.host{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px;background:var(--idle)}
+.dot.running{background:var(--ok)} .dot.degraded{background:var(--warn)} .dot.stopped{background:var(--bad)}
+
+.empty{text-align:center;color:var(--muted);padding:56px 20px}
+.empty code{background:var(--panel);padding:2px 7px;border-radius:6px;border:1px solid var(--border);font-size:13px}
+.err{background:color-mix(in srgb,var(--bad) 11%,transparent);border:1px solid color-mix(in srgb,var(--bad) 32%,transparent);
+  color:var(--bad);padding:11px 14px;border-radius:10px;margin-bottom:18px;font-size:13.5px}
+kbd{background:var(--panel);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;
+  padding:1px 6px;font:600 11.5px ui-monospace,monospace;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Launcher</h1>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+           stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search apps…   /" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="meta">
+      <span id="stamp">loading…</span>
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+  </header>
+  <div id="banner"></div>
+  <main id="out"></main>
+</div>
+
+<script>
+const out = document.getElementById('out');
+const banner = document.getElementById('banner');
+const stamp = document.getElementById('stamp');
+const q = document.getElementById('q');
+let apps = [];
+
+const hostOf = (u) => { try { return new URL(u).host; } catch { return u; } };
+
+function render() {
+  const term = q.value.trim().toLowerCase();
+  const shown = apps.filter(a =>
+    !term || a.name.toLowerCase().includes(term) ||
+    a.url.toLowerCase().includes(term) ||
+    (a.description || '').toLowerCase().includes(term) ||
+    a.project.toLowerCase().includes(term));
+
+  if (!shown.length) {
+    out.innerHTML = apps.length
+      ? '<div class="empty">Nothing matches that.</div>'
+      : '<div class="empty">No apps with a domain yet.<br><br>Give a resource an FQDN in Coolify and it appears here automatically.</div>';
+    return;
+  }
+
+  const groups = {};
+  for (const a of shown) (groups[a.project] ||= []).push(a);
+
+  out.innerHTML = Object.entries(groups).map(([project, list]) => `
+    <section class="group">
+      <h2>${esc(project)} · ${list.length}</h2>
+      <div class="grid">
+        ${list.map(a => `
+          <a class="tile" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer"
+             title="${esc(a.description || a.url)}">
+            <span class="icon" data-letter="${esc(a.name[0].toUpperCase())}">
+              <img src="${esc(new URL('/favicon.ico', a.url).href)}" alt="" loading="lazy"
+                   onerror="this.replaceWith(document.createTextNode(this.parentNode.dataset.letter))">
+            </span>
+            <span class="info">
+              <div class="name">${esc(a.name)}</div>
+              <div class="host">${esc(hostOf(a.url))}</div>
+            </span>
+            <span class="dot ${esc(a.status)}" title="${esc(a.status)}"></span>
+          </a>`).join('')}
+      </div>
+    </section>`).join('');
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function load(force) {
+  try {
+    const res = await fetch('/api/apps' + (force ? '?refresh=1' : ''), { cache: 'no-store' });
+    if (res.status === 401) return location.reload();
+    const data = await res.json();
+    apps = data.apps || [];
+    document.getElementById('title').textContent = data.title || 'Launcher';
+    document.title = (data.title || 'Launcher') + ' · Launcher';
+    stamp.innerHTML = data.fetchedAt
+      ? new Date(data.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+        (data.stale ? ' <span class="badge">stale</span>' : '')
+      : '—';
+    banner.innerHTML = data.error ? `<div class="err">Coolify: ${esc(data.error)}</div>` : '';
+    render();
+  } catch (err) {
+    banner.innerHTML = `<div class="err">Cannot reach the launcher API: ${esc(err.message)}</div>`;
+  }
+}
+
+q.addEventListener('input', render);
+document.getElementById('refresh').addEventListener('click', () => load(true));
+
+// `/` jumps to search; Enter opens the first result; Esc clears.
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); q.select(); }
+  else if (e.key === 'Escape') { q.value = ''; render(); q.blur(); }
+  else if (e.key === 'Enter' && document.activeElement === q) {
+    const first = out.querySelector('a.tile');
+    if (first) window.open(first.href, '_blank', 'noopener');
+  }
+});
+
+load();
+setInterval(load, 30000);
+// A tab left open overnight should be current the moment it is focused again.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
