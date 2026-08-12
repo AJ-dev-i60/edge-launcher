@@ -5,7 +5,7 @@ WORKDIR /app
 # No dependencies to install — the server uses only Node built-ins, so the
 # image is just the runtime plus two source files.
 COPY package.json ./
-COPY server.js ./
+COPY server.js auth.js ./
 COPY public ./public
 
 ENV NODE_ENV=production
