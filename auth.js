@@ -113,15 +113,19 @@ class OidcAuth {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`,
         Accept: 'application/json',
       },
+      // Pocket-ID expects client_secret_post: it ignores an HTTP Basic header
+      // and answers "Client id or secret not provided". Its discovery document
+      // advertises no token_endpoint_auth_methods_supported, so this is not
+      // discoverable — it has to be known.
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
         redirect_uri: this.redirectUri,
         code_verifier: entry.verifier,
         client_id: this.clientId,
+        client_secret: this.clientSecret,
       }),
       signal: AbortSignal.timeout(20000),
     });
