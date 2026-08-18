@@ -367,6 +367,13 @@ server.listen(CONFIG.port, () => {
   }
   refresh();
   setInterval(refresh, CONFIG.refreshMs).unref();
-  hostMetrics.sample();
+  // Log the first reading so the host figures are checkable from the
+  // deployment logs — this page is normally behind SSO.
+  hostMetrics.sample().then((m) => {
+    if (!m) return console.warn('[launcher] host metrics unavailable (/proc unreadable)');
+    console.log(`[launcher] host: ${m.cores} cores, `
+      + `${(m.memTotal / 2 ** 30).toFixed(1)} GiB total, `
+      + `up ${(m.uptimeSec / 86400).toFixed(1)}d, load ${m.load1}`);
+  });
   setInterval(hostMetrics.sample, 5000).unref();
 });
