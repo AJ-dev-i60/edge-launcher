@@ -45,6 +45,16 @@ header{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
 .clock .time{font-family:var(--font-heading);font-size:26px;line-height:1}
 .clock .tz{font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:.5}
 .sep{width:1px;height:34px;background:rgba(244,241,234,.2)}
+.metrics{display:flex;align-items:flex-end;gap:22px}
+.metric{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:76px}
+.metric .val{font-family:var(--font-heading);font-size:22px;line-height:1;white-space:nowrap}
+.metric .val .u{font-size:12px;opacity:.55;margin-left:1px}
+.metric .bar{width:100%;height:2px;background:rgba(244,241,234,.16);overflow:hidden}
+.metric .bar i{display:block;height:100%;background:var(--accent);transition:width .5s ease}
+.metric .lab{font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:.5;white-space:nowrap}
+.metric.warn .bar i{background:var(--dot-degraded)}
+.metric.hot .bar i{background:var(--bad)}
+.metric.hot .val{color:var(--bad)}
 .health{display:flex;align-items:center;gap:9px}
 .health .beat{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2.4s infinite}
 .health .label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.65}
@@ -108,6 +118,8 @@ footer a:hover{color:var(--accent)}
       <span class="wordmark" id="wordmark">&nbsp;</span>
     </div>
     <div class="readout">
+      <div class="metrics" id="metrics" hidden></div>
+      <span class="sep" id="metricsSep" hidden></span>
       <div class="clock">
         <span class="time" id="clock">--:--</span>
         <span class="tz" id="tz"></span>
@@ -281,6 +293,54 @@ function tick() {
   health.classList.toggle('is-stale', Boolean(data.stale));
 }
 
+const fmtGiB = (b) => { const g = b / 2 ** 30; return g >= 10 ? g.toFixed(0) : g.toFixed(1); };
+
+function fmtUptime(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// These are the HOST's figures, not this container's — Docker leaves /proc
+// unvirtualised, so the launcher reads the whole VPS.
+function renderMetrics(h) {
+  const el = document.getElementById('metrics');
+  const sep = document.getElementById('metricsSep');
+  if (!h || !h.memTotal) { el.hidden = true; sep.hidden = true; return; }
+  el.hidden = false; sep.hidden = false;
+
+  const memPct = Math.round((100 * h.memUsed) / h.memTotal);
+  const band = (p) => (p >= 90 ? 'metric hot' : p >= 75 ? 'metric warn' : 'metric');
+  // cpuPct is null until two samples exist; an em dash is honest, 0% is not.
+  const cpu = h.cpuPct;
+
+  el.innerHTML = `
+    <div class="${cpu == null ? 'metric' : band(cpu)}">
+      <span class="val">${cpu == null ? '—' : cpu}<span class="u">%</span></span>
+      <span class="bar"><i style="width:${cpu == null ? 0 : cpu}%"></i></span>
+      <span class="lab">cpu · ${h.cores}c</span>
+    </div>
+    <div class="${band(memPct)}">
+      <span class="val">${fmtGiB(h.memUsed)}<span class="u">/${fmtGiB(h.memTotal)}G</span></span>
+      <span class="bar"><i style="width:${memPct}%"></i></span>
+      <span class="lab">memory</span>
+    </div>
+    <div class="metric">
+      <span class="val">${fmtUptime(h.uptimeSec)}</span>
+      <span class="bar" style="visibility:hidden"></span>
+      <span class="lab">uptime · load ${h.load1.toFixed(2)}</span>
+    </div>`;
+}
+
+async function loadHost() {
+  try {
+    const res = await fetch('/api/host', { cache: 'no-store' });
+    if (!res.ok) return;
+    renderMetrics(await res.json());
+  } catch { /* leave the last reading in place */ }
+}
+
 async function load(force) {
   try {
     const res = await fetch('/api/apps' + (force ? '?refresh=1' : ''), { cache: 'no-store' });
@@ -303,6 +363,7 @@ async function load(force) {
     banner.innerHTML = data.error ? `<div class="err">Coolify — ${esc(data.error)}</div>` : '';
     renderControls();
     renderGrid();
+    renderMetrics(data.host);
     tick();
   } catch (err) {
     banner.innerHTML = `<div class="err">Launcher API unreachable — ${esc(err.message)}</div>`;
@@ -320,7 +381,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 load();
+loadHost();
 setInterval(tick, 1000);
+setInterval(loadHost, 10000);
 setInterval(load, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 </script>

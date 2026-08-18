@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { OidcAuth } = require('./auth');
+const hostMetrics = require('./host');
 
 const CONFIG = {
   coolifyUrl: (process.env.COOLIFY_URL || 'https://coolify.edgestudios.co.za').replace(/\/+$/, ''),
@@ -324,6 +325,13 @@ const server = http.createServer(async (req, res) => {
     return send(res, 401, 'text/html; charset=utf-8', LOGIN_PAGE.replace('__ERROR__', ''));
   }
 
+  // Metrics are cheap and change faster than the Coolify list, so the page
+  // refreshes them on their own short interval rather than dragging the whole
+  // application payload along every few seconds.
+  if (url.pathname === '/api/host') {
+    return send(res, 200, 'application/json', JSON.stringify(hostMetrics.get()));
+  }
+
   if (url.pathname === '/api/apps') {
     if (url.searchParams.get('refresh') === '1') await refresh();
     const session = AUTH_MODE === 'oidc' ? oidc.sessionFrom(req) : null;
@@ -338,6 +346,7 @@ const server = http.createServer(async (req, res) => {
         refreshMs: CONFIG.refreshMs,
         authMode: AUTH_MODE,
         user: session?.name || null,
+        host: hostMetrics.get(),
       })
     );
   }
@@ -358,4 +367,6 @@ server.listen(CONFIG.port, () => {
   }
   refresh();
   setInterval(refresh, CONFIG.refreshMs).unref();
+  hostMetrics.sample();
+  setInterval(hostMetrics.sample, 5000).unref();
 });
