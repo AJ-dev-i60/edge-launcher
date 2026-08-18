@@ -1,0 +1,10 @@
+.git
+.gitignore
+node_modules
+npm-debug.log
+*.log
+# Never bake secrets into the image — config arrives as environment variables.
+.env
+.env.*
+!.env.example
+README.md

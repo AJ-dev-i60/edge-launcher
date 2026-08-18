@@ -2,11 +2,15 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# No dependencies to install — the server uses only Node built-ins, so the
-# image is just the runtime plus two source files.
-COPY package.json ./
-COPY server.js auth.js ./
-COPY public ./public
+# No dependencies to install — the server uses only Node built-ins, so there
+# is no npm install step and the image is the runtime plus the source.
+#
+# Copy the whole source tree rather than naming files. Enumerating them meant
+# a newly added module silently missed the image and only failed at runtime —
+# which is how both auth.js and host.js broke a deploy. .dockerignore keeps
+# .env, .git and node_modules out.
+COPY . .
+RUN rm -rf .env .env.* 2>/dev/null || true
 
 ENV NODE_ENV=production
 ENV PORT=3000
